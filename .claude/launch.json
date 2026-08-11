@@ -1,0 +1,10 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "amarbn-vercel",
+      "url": "https://amarbn-associacao.vercel.app",
+      "port": 443
+    }
+  ]
+}

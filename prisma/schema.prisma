@@ -1,0 +1,14 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+datasource db { provider = "postgresql" }
+enum Role { ADMIN SECRETARIA FINANCEIRO ASSOCIADO }
+enum MemberStatus { ATIVO PENDENTE INATIVO }
+enum PaymentStatus { PENDENTE PAGO ATRASADO CANCELADO }
+enum DocumentKind { ESTATUTO ATA EDITAL REGIMENTO OUTRO }
+model User { id String @id @default(cuid()) email String @unique passwordHash String name String role Role @default(ASSOCIADO) member Member? createdAt DateTime @default(now()) updatedAt DateTime @updatedAt }
+model Member { id String @id @default(cuid()) registration String @unique cpf String @unique fullName String birthDate DateTime? phone String? address String? photoUrl String? status MemberStatus @default(PENDENTE) joinedAt DateTime @default(now()) userId String? @unique user User? @relation(fields:[userId], references:[id]) payments Payment[] createdAt DateTime @default(now()) updatedAt DateTime @updatedAt }
+model Payment { id String @id @default(cuid()) memberId String member Member @relation(fields:[memberId], references:[id], onDelete:Cascade) reference String dueDate DateTime amount Decimal @db.Decimal(10,2) status PaymentStatus @default(PENDENTE) paidAt DateTime? receiptNumber String? createdAt DateTime @default(now()) @@unique([memberId,reference]) @@index([status,dueDate]) }
+model InstitutionalDocument { id String @id @default(cuid()) title String kind DocumentKind referenceDate DateTime? contentUrl String description String? published Boolean @default(false) createdAt DateTime @default(now()) updatedAt DateTime @updatedAt }
+model Assembly { id String @id @default(cuid()) title String scheduledAt DateTime location String? agenda String? minutesUrl String? status String @default("AGENDADA") createdAt DateTime @default(now()) }
