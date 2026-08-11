@@ -41,6 +41,7 @@
     "**/*.test.tsx",
     "jest.config.js",
     "jest.setup.js",
+    "scripts/**",
     "Sorte Fibra LM/**"
   ]
 }
