@@ -64,3 +64,24 @@ export async function clearSessionCookie() {
   const cookieStore = await cookies();
   cookieStore.delete("amarbn_session");
 }
+
+export function createSessionToken(userId: string, email: string, role: string, memberId?: string): string {
+  return signJwt({
+    userId,
+    email,
+    role: role as any,
+    name: '',
+    memberId,
+  });
+}
+
+export function createSessionCookie(token: string): string {
+  const maxAge = 86400 * 7;
+  const secure = process.env.NODE_ENV === 'production' ? 'Secure;' : '';
+  return `amarbn_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}; ${secure}`;
+}
+
+export function createLogoutCookie(): string {
+  const secure = process.env.NODE_ENV === 'production' ? 'Secure;' : '';
+  return `amarbn_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; ${secure}`;
+}

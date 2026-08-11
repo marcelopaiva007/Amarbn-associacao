@@ -341,3 +341,19 @@ export function createAssembly(data: { title: string; scheduledAt: string; locat
   });
   return id;
 }
+
+// Aliases for API route compatibility
+export const getUserByEmail = findUserByEmail;
+export const getUserById = findUserById;
+export const getMemberByUserId = findMemberByUserId;
+
+// Mock Prisma client for compatibility
+export const prisma = {
+  user: {
+    findUnique: async (opts: any) => {
+      if (opts.where?.email) return findUserByEmail(opts.where.email);
+      if (opts.where?.id) return findUserById(opts.where.id);
+      return null;
+    },
+  },
+};
