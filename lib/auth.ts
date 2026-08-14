@@ -41,6 +41,8 @@ export function verifyJwt(token: string): SessionPayload | null {
   }
 }
 
+export const verifySessionToken = verifyJwt;
+
 export async function getSession(): Promise<SessionPayload | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get("amarbn_session")?.value;
