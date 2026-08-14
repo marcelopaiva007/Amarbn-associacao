@@ -75,12 +75,6 @@ export default function Login() {
             {isPending ? "Entrando..." : "Entrar"}
           </button>
 
-          <div className="mt-6 rounded-lg bg-[#f0f4f2] p-3 text-xs text-[#52656a]">
-            <p className="font-bold text-[#164b50]">Credenciais de teste:</p>
-            <p className="mt-1">Admin: <code className="font-mono">admin@amarbn.org.br</code> / <code className="font-mono">admin123</code></p>
-            <p className="mt-1">Associado: <code className="font-mono">associado@amarbn.org.br</code> / <code className="font-mono">associado123</code></p>
-          </div>
-
           <Link href="/" className="mt-5 block text-center text-sm font-bold text-[#3c8876]">
             Voltar para o site
           </Link>
