@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 
 const SECRET = process.env.APP_SESSION_SECRET || "amarbn-secret-key-production-change-this-min-32-chars";
@@ -12,12 +13,11 @@ export interface SessionPayload {
 }
 
 export function hashPassword(password: string): string {
-  const salt = "amarbn_salt_2026";
-  return crypto.pbkdf2Sync(password, salt, 10000, 64, "sha512").toString("hex");
+  return bcrypt.hashSync(password, 12);
 }
 
 export function verifyPassword(password: string, hash: string): boolean {
-  return hashPassword(password) === hash;
+  return bcrypt.compareSync(password, hash);
 }
 
 export function signJwt(payload: SessionPayload): string {
@@ -40,6 +40,8 @@ export function verifyJwt(token: string): SessionPayload | null {
     return null;
   }
 }
+
+export const verifySessionToken = verifyJwt;
 
 export async function getSession(): Promise<SessionPayload | null> {
   const cookieStore = await cookies();

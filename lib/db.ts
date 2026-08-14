@@ -16,7 +16,7 @@ function initMemoryDb() {
     {
       id: "usr_admin_01",
       email: "admin@amarbn.org.br",
-      passwordHash: hashPassword("admin123"),
+      passwordHash: hashPassword(process.env.ADMIN_PASSWORD || "yYcT!9KDpcq%LEvG%p"),
       name: "Administrador AMARBN",
       role: "ADMIN",
       createdAt: now,
