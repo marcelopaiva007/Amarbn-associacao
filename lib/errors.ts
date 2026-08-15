@@ -51,6 +51,13 @@ export class RateLimitError extends AppError {
   }
 }
 
+export class ConfigurationError extends AppError {
+  constructor(message = 'Sistema não configurado') {
+    super(500, message);
+    this.name = 'ConfigurationError';
+  }
+}
+
 export class ServerError extends AppError {
   constructor(message = 'Erro interno do servidor', details?: Record<string, any>) {
     super(500, message, details);

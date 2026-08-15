@@ -19,7 +19,7 @@ export default async function Portal() {
 
   let member = null;
   if (session.memberId) {
-    member = findMemberByUserId(session.userId);
+    member = await findMemberByUserId(session.userId);
   }
 
   const associate = {
@@ -29,12 +29,13 @@ export default async function Portal() {
     photoUrl: member?.photoUrl || null,
   };
 
-  const payments: any[] = member ? getPaymentsByMemberId(member.id) : [];
+  const [payments, documents, assemblies] = await Promise.all([
+    member ? getPaymentsByMemberId(member.id) : Promise.resolve([]),
+    listDocuments(),
+    listAssemblies(),
+  ]);
   const pendingPayments = payments.filter((p: any) => p.status === "PENDENTE" || p.status === "ATRASADO");
   const nextPayment = pendingPayments[0];
-
-  const documents: any[] = listDocuments();
-  const assemblies: any[] = listAssemblies();
 
   return (
     <div className="min-h-screen bg-[#f5f2e9]">

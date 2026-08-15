@@ -11,7 +11,7 @@ export default async function MembersPage({
   const params = await searchParams;
   const search = params.q || "";
   const status = params.status || "TODOS";
-  const members = listMembers(search, status);
+  const members = await listMembers(search, status);
 
   return <MembersClient initialMembers={members} initialSearch={search} initialStatus={status} />;
 }

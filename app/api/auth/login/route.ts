@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { hashPassword, verifyPassword, createSessionToken, createSessionCookie } from '@/lib/auth';
 import { LoginSchema, formatZodErrors, checkRateLimit, getRateLimitRemaining } from '@/lib/utils';
-import { getUserByEmail, prisma } from '@/lib/db';
+import { getUserByEmail } from '@/lib/db';
 import { logAudit, AuditAction, getClientIp, getUserAgent } from '@/lib/audit';
 
 export async function POST(request: NextRequest) {

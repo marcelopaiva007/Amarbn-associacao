@@ -1,49 +1,70 @@
-import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+import "dotenv/config";
+import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../app/generated/prisma/client";
 
-const prisma = new PrismaClient();
+/**
+ * Cria (ou atualiza) o usuário administrador da AMARBN.
+ *
+ * Nenhuma senha fica escrita neste arquivo. A senha vem de ADMIN_PASSWORD e,
+ * se a variável não estiver definida, uma senha forte é sorteada e mostrada
+ * uma única vez no terminal.
+ *
+ *   ADMIN_EMAIL="secretaria@amarbn.org.br" ADMIN_PASSWORD="..." npm run db:seed
+ */
+
+const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*";
+const MIN_PASSWORD_LENGTH = 12;
+
+function generatePassword(length = 20): string {
+  return Array.from(randomBytes(length), (byte) => ALPHABET[byte % ALPHABET.length]).join("");
+}
 
 async function main() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    console.error("✗ DATABASE_URL não definida. Configure o .env antes de rodar o seed.");
+    process.exit(1);
+  }
+
+  const email = (process.env.ADMIN_EMAIL || "admin@amarbn.org.br").toLowerCase();
+  const providedPassword = process.env.ADMIN_PASSWORD;
+
+  if (providedPassword && providedPassword.length < MIN_PASSWORD_LENGTH) {
+    console.error(`✗ ADMIN_PASSWORD precisa ter ao menos ${MIN_PASSWORD_LENGTH} caracteres.`);
+    process.exit(1);
+  }
+
+  const password = providedPassword || generatePassword();
+  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+
   try {
-    // Check if admin already exists
-    const existingAdmin = await prisma.user.findUnique({
-      where: { email: 'admin@amarbn.org.br' },
-    });
+    const passwordHash = await bcrypt.hash(password, 12);
 
-    if (existingAdmin) {
-      console.log('✓ Admin user already exists');
-      return;
-    }
-
-    // Create admin user with bcrypt hashed password
-    const passwordHash = await bcrypt.hash(
-      'troque-esta-senha-antes-do-primeiro-acesso',
-      12
-    );
-
-    const admin = await prisma.user.create({
-      data: {
-        email: 'admin@amarbn.org.br',
+    await prisma.user.upsert({
+      where: { email },
+      update: { passwordHash, role: "ADMIN" },
+      create: {
+        email,
         passwordHash,
-        name: 'Administrator',
-        role: 'ADMIN',
-        member: {
-          create: {
-            registration: 'ADMIN-001',
-            cpf: '00000000001',
-            fullName: 'Administrador AMARBN',
-            status: 'ATIVO',
-          },
-        },
+        name: process.env.ADMIN_NAME || "Administrador AMARBN",
+        role: "ADMIN",
       },
-      include: { member: true },
     });
 
-    console.log('✓ Admin user created successfully');
-    console.log('  Email:', admin.email);
-    console.log('  Role:', admin.role);
+    console.log("✓ Usuário administrador pronto");
+    console.log(`  E-mail: ${email}`);
+
+    if (providedPassword) {
+      console.log("  Senha:  (a definida em ADMIN_PASSWORD)");
+    } else {
+      console.log(`  Senha:  ${password}`);
+      console.log("\n  ⚠ Anote esta senha agora — ela não será mostrada de novo.");
+      console.log("    Guarde-a também em ADMIN_PASSWORD no ambiente de produção.");
+    }
   } catch (error) {
-    console.error('✗ Error seeding database:', error);
+    console.error("✗ Erro ao executar o seed:", error);
     process.exit(1);
   } finally {
     await prisma.$disconnect();

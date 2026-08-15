@@ -13,7 +13,7 @@ export async function createDocumentAction(prevState: any, formData: FormData) {
     return { error: "Título, tipo e arquivo/link são obrigatórios." };
   }
 
-  createDocument({ title, kind, contentUrl, description });
+  await createDocument({ title, kind, contentUrl, description });
   revalidatePath("/admin/documentos");
   revalidatePath("/admin");
   revalidatePath("/portal");
@@ -30,7 +30,7 @@ export async function createAssemblyAction(prevState: any, formData: FormData) {
     return { error: "Título e data/horário são obrigatórios." };
   }
 
-  createAssembly({ title, scheduledAt, location, agenda });
+  await createAssembly({ title, scheduledAt, location, agenda });
   revalidatePath("/admin/documentos");
   revalidatePath("/admin");
   revalidatePath("/portal");

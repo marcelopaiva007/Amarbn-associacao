@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, UserPlus, X, CheckCircle, Ban, Mail, Phone, MapPin } from "lucide-react";
+import { Search, UserPlus, X, CheckCircle, Ban, Mail, Phone, MapPin, KeyRound } from "lucide-react";
 import { createMemberAction, toggleMemberStatusAction } from "./actions";
 
 export function MembersClient({
@@ -20,6 +20,12 @@ export function MembersClient({
   const [search, setSearch] = useState(initialSearch);
   const [status, setStatus] = useState(initialStatus);
   const [formError, setFormError] = useState("");
+  // Senha provisória do associado recém-cadastrado. Existe só nesta tela: a
+  // secretaria anota e entrega, e ela não pode ser consultada de novo.
+  const [newCredentials, setNewCredentials] = useState<{
+    email: string;
+    temporaryPassword: string;
+  } | null>(null);
 
   const handleSearchChange = (val: string) => {
     setSearch(val);
@@ -49,10 +55,21 @@ export function MembersClient({
     const res = await createMemberAction(null, formData);
     if (res?.error) {
       setFormError(res.error);
+      return;
+    }
+
+    router.refresh();
+    if (res?.temporaryPassword && res.email) {
+      setNewCredentials({ email: res.email, temporaryPassword: res.temporaryPassword });
     } else {
       setShowModal(false);
-      router.refresh();
     }
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setNewCredentials(null);
+    setFormError("");
   };
 
   return (
@@ -169,8 +186,10 @@ export function MembersClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-2xl bg-[#fffdf8] p-6 shadow-xl border border-[#dce4de]">
             <div className="flex items-center justify-between border-b border-[#dce4de] pb-4">
-              <h2 className="text-xl font-black text-[#102a32]">Cadastrar Novo Associado</h2>
-              <button onClick={() => setShowModal(false)} className="text-[#52656a] hover:text-[#102a32]">
+              <h2 className="text-xl font-black text-[#102a32]">
+                {newCredentials ? "Associado cadastrado" : "Cadastrar Novo Associado"}
+              </h2>
+              <button onClick={closeModal} className="text-[#52656a] hover:text-[#102a32]">
                 <X size={20} />
               </button>
             </div>
@@ -181,6 +200,49 @@ export function MembersClient({
               </div>
             )}
 
+            {newCredentials ? (
+              <div className="mt-5 text-sm">
+                <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
+                  <KeyRound className="mt-0.5 shrink-0 text-amber-700" size={18} />
+                  <div>
+                    <p className="font-bold text-amber-900">Senha provisória de acesso</p>
+                    <p className="mt-1 text-xs text-amber-900">
+                      Anote e entregue ao associado agora. Por segurança, esta senha não pode ser
+                      consultada novamente.
+                    </p>
+                  </div>
+                </div>
+
+                <dl className="mt-4 space-y-3">
+                  <div>
+                    <dt className="text-xs font-bold uppercase tracking-wider text-[#52656a]">
+                      E-mail
+                    </dt>
+                    <dd className="mt-1 rounded-lg border border-[#dce4de] bg-white px-3 py-2 font-mono text-[#102a32]">
+                      {newCredentials.email}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-bold uppercase tracking-wider text-[#52656a]">
+                      Senha provisória
+                    </dt>
+                    <dd className="mt-1 rounded-lg border border-[#dce4de] bg-white px-3 py-2 font-mono text-lg font-bold tracking-wide text-[#102a32]">
+                      {newCredentials.temporaryPassword}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="mt-6 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="rounded-full bg-[#164b50] px-5 py-2 text-xs font-bold text-white hover:bg-[#102a32]"
+                  >
+                    Anotei, pode fechar
+                  </button>
+                </div>
+              </div>
+            ) : (
             <form onSubmit={handleSubmit} className="mt-4 grid gap-4 text-sm">
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block font-bold">
@@ -247,7 +309,7 @@ export function MembersClient({
               <div className="mt-4 flex justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={closeModal}
                   className="rounded-full border border-[#dce4de] px-4 py-2 text-xs font-bold text-[#52656a]"
                 >
                   Cancelar
@@ -260,6 +322,7 @@ export function MembersClient({
                 </button>
               </div>
             </form>
+            )}
           </div>
         </div>
       )}
