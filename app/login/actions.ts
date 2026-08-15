@@ -12,14 +12,14 @@ export async function loginAction(prevState: any, formData: FormData) {
     return { error: "Preencha o e-mail e a senha." };
   }
 
-  const user = findUserByEmail(email);
+  const user = await findUserByEmail(email);
   if (!user || !verifyPassword(password, user.passwordHash)) {
     return { error: "E-mail ou senha inválidos." };
   }
 
   let memberId: string | undefined = undefined;
   if (user.role === "ASSOCIADO") {
-    const member = findMemberByUserId(user.id);
+    const member = await findMemberByUserId(user.id);
     if (member) memberId = member.id;
   }
 

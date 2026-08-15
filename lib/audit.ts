@@ -1,5 +1,3 @@
-import { prisma } from './db';
-
 export enum AuditAction {
   LOGIN_SUCCESS = 'LOGIN_SUCCESS',
   LOGIN_FAILURE = 'LOGIN_FAILURE',

@@ -17,19 +17,34 @@ export async function createMemberAction(prevState: any, formData: FormData) {
   }
 
   try {
-    createMember({ fullName, cpf, registration, email, phone, address, birthDate });
+    const { temporaryPassword } = await createMember({
+      fullName,
+      cpf,
+      registration,
+      email,
+      phone,
+      address,
+      birthDate,
+    });
     revalidatePath("/admin/associados");
-    return { success: true };
+    // A senha provisória só existe nesta resposta: é exibida uma vez para a
+    // secretaria entregar ao associado e não fica gravada em lugar nenhum.
+    return { success: true, email, temporaryPassword };
   } catch (err: any) {
-    if (err.message?.includes("UNIQUE")) {
+    if (err.code === "P2002") {
+      const field = Array.isArray(err.meta?.target) ? err.meta.target.join(", ") : "";
+      if (field.includes("email")) {
+        return { error: "Este e-mail já está em uso por outro cadastro." };
+      }
       return { error: "CPF ou Matrícula já cadastrados." };
     }
+    console.error("Erro ao cadastrar associado:", err);
     return { error: "Erro ao cadastrar associado." };
   }
 }
 
 export async function toggleMemberStatusAction(memberId: string, currentStatus: string) {
   const newStatus = currentStatus === "ATIVO" ? "INATIVO" : "ATIVO";
-  updateMemberStatus(memberId, newStatus);
+  await updateMemberStatus(memberId, newStatus);
   revalidatePath("/admin/associados");
 }

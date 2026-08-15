@@ -17,7 +17,7 @@ export async function generatePaymentsAction(prevState: any, formData: FormData)
     return { error: "Valor inválido." };
   }
 
-  const count = generateMonthlyPayments(reference, dueDate, amount);
+  const count = await generateMonthlyPayments(reference, dueDate, amount);
   revalidatePath("/admin/financeiro");
   revalidatePath("/admin");
   revalidatePath("/portal");
@@ -25,7 +25,7 @@ export async function generatePaymentsAction(prevState: any, formData: FormData)
 }
 
 export async function markPaymentPaidAction(paymentId: string, receiptNumber?: string) {
-  markPaymentAsPaid(paymentId, receiptNumber);
+  await markPaymentAsPaid(paymentId, receiptNumber);
   revalidatePath("/admin/financeiro");
   revalidatePath("/admin");
   revalidatePath("/portal");

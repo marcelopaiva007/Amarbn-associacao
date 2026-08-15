@@ -10,8 +10,7 @@ export default async function FinancePage({
 }) {
   const params = await searchParams;
   const status = params.status || "TODOS";
-  const payments = listPayments(status);
-  const summary = getFinancialSummary();
+  const [payments, summary] = await Promise.all([listPayments(status), getFinancialSummary()]);
 
   return <FinanceClient initialPayments={payments} summary={summary} initialStatus={status} />;
 }

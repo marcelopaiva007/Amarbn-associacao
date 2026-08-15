@@ -1,186 +1,136 @@
-import { hashPassword } from "./auth";
+import bcrypt from "bcryptjs";
+import { getPrisma } from "./prisma";
+import type { MemberStatus, PaymentStatus, DocumentKind } from "@/app/generated/prisma/client";
 
-// Global in-memory database store for Vercel Serverless & Local
-declare global {
-  var __amarbn_db: any;
+// Camada de acesso a dados da AMARBN. Toda leitura e escrita passa por aqui e
+// termina no PostgreSQL — não existe mais estado em memória, que se perdia a
+// cada reinício do serverless.
+
+// As telas renderizam datas direto como texto, então a conversão de Date para
+// string acontece aqui e não em cada componente.
+function dateOnly(value: Date | null): string | null {
+  return value ? value.toISOString().slice(0, 10) : null;
 }
 
-function initMemoryDb() {
-  if (globalThis.__amarbn_db) {
-    return globalThis.__amarbn_db;
-  }
-
-  const now = new Date().toISOString();
-
-  const users = [
-    {
-      id: "usr_admin_01",
-      email: "admin@amarbn.org.br",
-      passwordHash: hashPassword(process.env.ADMIN_PASSWORD || "yYcT!9KDpcq%LEvG%p"),
-      name: "Administrador AMARBN",
-      role: "ADMIN",
-      createdAt: now,
-    },
-    {
-      id: "usr_assoc_01",
-      email: "associado@amarbn.org.br",
-      passwordHash: hashPassword("associado123"),
-      name: "Carlos Eduardo Silva",
-      role: "ASSOCIADO",
-      createdAt: now,
-    },
-  ];
-
-  const members = [
-    {
-      id: "mbr_01",
-      registration: "AMR-2026-0001",
-      cpf: "123.456.789-00",
-      fullName: "Carlos Eduardo Silva",
-      birthDate: "1985-04-12",
-      phone: "(81) 98877-6655",
-      address: "Rua das Palmeiras, 120 - Nordeste - Recife/PE",
-      photoUrl: null,
-      status: "ATIVO",
-      joinedAt: "2024-01-15",
-      userId: "usr_assoc_01",
-      createdAt: now,
-    },
-    {
-      id: "mbr_02",
-      registration: "AMR-2026-0002",
-      cpf: "987.654.321-11",
-      fullName: "Maria Alice Oliveira",
-      birthDate: "1990-08-22",
-      phone: "(81) 99112-3344",
-      address: "Av. Principal, 450 - Nordeste - Recife/PE",
-      photoUrl: null,
-      status: "ATIVO",
-      joinedAt: "2024-02-10",
-      userId: null,
-      createdAt: now,
-    },
-  ];
-
-  const payments = [
-    {
-      id: "pay_01",
-      memberId: "mbr_01",
-      memberName: "Carlos Eduardo Silva",
-      memberRegistration: "AMR-2026-0001",
-      reference: "2026-08",
-      dueDate: "2026-08-10",
-      amount: 45.0,
-      status: "PAGO",
-      paidAt: now,
-      receiptNumber: "REC-2026-0801",
-      createdAt: now,
-    },
-    {
-      id: "pay_02",
-      memberId: "mbr_01",
-      memberName: "Carlos Eduardo Silva",
-      memberRegistration: "AMR-2026-0001",
-      reference: "2026-09",
-      dueDate: "2026-09-10",
-      amount: 45.0,
-      status: "PENDENTE",
-      paidAt: null,
-      receiptNumber: null,
-      createdAt: now,
-    },
-    {
-      id: "pay_03",
-      memberId: "mbr_02",
-      memberName: "Maria Alice Oliveira",
-      memberRegistration: "AMR-2026-0002",
-      reference: "2026-08",
-      dueDate: "2026-08-10",
-      amount: 45.0,
-      status: "PENDENTE",
-      paidAt: null,
-      receiptNumber: null,
-      createdAt: now,
-    },
-  ];
-
-  const documents = [
-    {
-      id: "doc_01",
-      title: "Estatuto Social AMARBN",
-      kind: "ESTATUTO",
-      referenceDate: "2024-01-01",
-      contentUrl: "#",
-      description: "Estatuto social consolidado da associação dos moradores e agricultores",
-      published: 1,
-      createdAt: now,
-    },
-    {
-      id: "doc_02",
-      title: "Ata da Assembleia Geral Ordinária 2026",
-      kind: "ATA",
-      referenceDate: "2026-03-15",
-      contentUrl: "#",
-      description: "Ata de prestação de contas e planejamento agrícola",
-      published: 1,
-      createdAt: now,
-    },
-  ];
-
-  const assemblies = [
-    {
-      id: "ass_01",
-      title: "Assembleia Geral Ordinária de Setembro",
-      scheduledAt: "2026-09-24 19:00",
-      location: "Sede Social AMARBN / Auditório",
-      agenda: "1. Prestação de contas do trimestre\n2. Feira agrícola comunitária\n3. Assuntos gerais",
-      status: "AGENDADA",
-      createdAt: now,
-    },
-  ];
-
-  const store = { users, members, payments, documents, assemblies };
-  globalThis.__amarbn_db = store;
-  return store;
+function dateTimeLabel(value: Date): string {
+  return `${value.toISOString().slice(0, 10)} ${value.toISOString().slice(11, 16)}`;
 }
 
-const db = initMemoryDb();
+function parseDateOnly(value: string): Date {
+  return new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
+}
+
+// `datetime-local` devolve "2026-09-24T19:00" sem fuso. Guardamos como UTC para
+// que o horário exibido seja exatamente o que a secretaria digitou.
+function parseDateTime(value: string): Date {
+  const normalized = value.trim().replace(" ", "T");
+  const withSeconds = normalized.length === 16 ? `${normalized}:00` : normalized;
+  return new Date(`${withSeconds}.000Z`);
+}
+
+type MemberRow = {
+  id: string;
+  registration: string;
+  cpf: string;
+  fullName: string;
+  birthDate: Date | null;
+  phone: string | null;
+  address: string | null;
+  photoUrl: string | null;
+  status: MemberStatus;
+  joinedAt: Date;
+  userId: string | null;
+  createdAt: Date;
+};
+
+function toMemberDto(member: MemberRow) {
+  return {
+    id: member.id,
+    registration: member.registration,
+    cpf: member.cpf,
+    fullName: member.fullName,
+    birthDate: dateOnly(member.birthDate),
+    phone: member.phone,
+    address: member.address,
+    photoUrl: member.photoUrl,
+    status: member.status,
+    joinedAt: dateOnly(member.joinedAt),
+    userId: member.userId,
+    createdAt: member.createdAt.toISOString(),
+  };
+}
+
+type PaymentRow = {
+  id: string;
+  memberId: string;
+  reference: string;
+  dueDate: Date;
+  amount: unknown;
+  status: PaymentStatus;
+  paidAt: Date | null;
+  receiptNumber: string | null;
+  createdAt: Date;
+  member?: { fullName: string; registration: string };
+};
+
+function toPaymentDto(payment: PaymentRow) {
+  return {
+    id: payment.id,
+    memberId: payment.memberId,
+    memberName: payment.member?.fullName ?? "",
+    memberRegistration: payment.member?.registration ?? "",
+    reference: payment.reference,
+    dueDate: dateOnly(payment.dueDate),
+    // Decimal do Prisma não atravessa a fronteira servidor/cliente do React.
+    amount: Number(payment.amount),
+    status: payment.status,
+    paidAt: payment.paidAt ? payment.paidAt.toISOString() : null,
+    receiptNumber: payment.receiptNumber,
+    createdAt: payment.createdAt.toISOString(),
+  };
+}
 
 // User / Auth Queries
-export function findUserByEmail(email: string) {
-  return db.users.find((u: any) => u.email.toLowerCase() === email.toLowerCase()) || null;
+export async function findUserByEmail(email: string) {
+  return getPrisma().user.findUnique({ where: { email: email.toLowerCase() } });
 }
 
-export function findUserById(id: string) {
-  return db.users.find((u: any) => u.id === id) || null;
+export async function findUserById(id: string) {
+  return getPrisma().user.findUnique({ where: { id } });
 }
 
-export function findMemberByUserId(userId: string) {
-  return db.members.find((m: any) => m.userId === userId) || null;
+export async function findMemberByUserId(userId: string) {
+  const member = await getPrisma().member.findUnique({ where: { userId } });
+  return member ? toMemberDto(member) : null;
 }
 
 // Members Queries
-export function listMembers(search?: string, status?: string) {
-  let list = db.members;
+export async function listMembers(search?: string, status?: string) {
+  const where: Record<string, unknown> = {};
 
   if (status && status !== "TODOS") {
-    list = list.filter((m: any) => m.status === status);
+    where.status = status as MemberStatus;
   }
 
   if (search && search.trim() !== "") {
-    const s = search.trim().toLowerCase();
-    list = list.filter(
-      (m: any) =>
-        m.fullName.toLowerCase().includes(s) ||
-        m.cpf.includes(s) ||
-        m.registration.toLowerCase().includes(s)
-    );
+    const term = search.trim();
+    where.OR = [
+      { fullName: { contains: term, mode: "insensitive" } },
+      { cpf: { contains: term } },
+      { registration: { contains: term, mode: "insensitive" } },
+    ];
   }
 
-  return list;
+  const members = await getPrisma().member.findMany({ where, orderBy: { fullName: "asc" } });
+  return members.map(toMemberDto);
 }
 
-export function createMember(data: {
+/**
+ * Cadastra o associado e, quando há e-mail, o login de acesso ao portal.
+ * A senha provisória é sorteada e devolvida uma única vez para a secretaria
+ * entregar ao associado — nunca é possível lê-la de novo depois disso.
+ */
+export async function createMember(data: {
   fullName: string;
   cpf: string;
   registration: string;
@@ -188,172 +138,209 @@ export function createMember(data: {
   phone?: string;
   address?: string;
   birthDate?: string;
-}) {
-  const now = new Date().toISOString();
-  const memberId = `mbr_${Date.now()}`;
-  let userId: string | null = null;
+}): Promise<{ memberId: string; temporaryPassword: string | null }> {
+  const temporaryPassword = data.email ? generateTemporaryPassword() : null;
 
-  if (data.email) {
-    userId = `usr_${Date.now()}`;
-    db.users.push({
-      id: userId,
-      email: data.email,
-      passwordHash: hashPassword("123456"),
-      name: data.fullName,
-      role: "ASSOCIADO",
-      createdAt: now,
-    });
-  }
+  const member = await getPrisma().member.create({
+    data: {
+      registration: data.registration,
+      cpf: data.cpf,
+      fullName: data.fullName,
+      birthDate: data.birthDate ? parseDateOnly(data.birthDate) : null,
+      phone: data.phone || null,
+      address: data.address || null,
+      status: "ATIVO",
+      user: data.email
+        ? {
+            create: {
+              email: data.email.toLowerCase(),
+              passwordHash: bcrypt.hashSync(temporaryPassword as string, 12),
+              name: data.fullName,
+              role: "ASSOCIADO",
+            },
+          }
+        : undefined,
+    },
+  });
 
-  const newMember = {
-    id: memberId,
-    registration: data.registration,
-    cpf: data.cpf,
-    fullName: data.fullName,
-    birthDate: data.birthDate || null,
-    phone: data.phone || null,
-    address: data.address || null,
-    photoUrl: null,
-    status: "ATIVO",
-    joinedAt: now.substring(0, 10),
-    userId,
-    createdAt: now,
-  };
-
-  db.members.push(newMember);
-  return memberId;
+  return { memberId: member.id, temporaryPassword };
 }
 
-export function updateMemberStatus(id: string, status: "ATIVO" | "PENDENTE" | "INATIVO") {
-  const m = db.members.find((x: any) => x.id === id);
-  if (m) m.status = status;
+const PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+
+export function generateTemporaryPassword(length = 12): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  return Array.from(bytes, (byte) => PASSWORD_ALPHABET[byte % PASSWORD_ALPHABET.length]).join("");
+}
+
+export async function updateMemberStatus(id: string, status: "ATIVO" | "PENDENTE" | "INATIVO") {
+  await getPrisma().member.update({ where: { id }, data: { status } });
 }
 
 // Financial / Payments Queries
-export function listPayments(statusFilter?: string) {
-  let list = db.payments;
+export async function listPayments(statusFilter?: string) {
+  const where =
+    statusFilter && statusFilter !== "TODOS" ? { status: statusFilter as PaymentStatus } : {};
 
-  if (statusFilter && statusFilter !== "TODOS") {
-    list = list.filter((p: any) => p.status === statusFilter);
+  const payments = await getPrisma().payment.findMany({
+    where,
+    include: { member: { select: { fullName: true, registration: true } } },
+    orderBy: [{ dueDate: "desc" }, { createdAt: "desc" }],
+  });
+
+  return payments.map(toPaymentDto);
+}
+
+export async function getPaymentsByMemberId(memberId: string) {
+  const payments = await getPrisma().payment.findMany({
+    where: { memberId },
+    include: { member: { select: { fullName: true, registration: true } } },
+    orderBy: { dueDate: "asc" },
+  });
+
+  return payments.map(toPaymentDto);
+}
+
+/**
+ * Gera a parcela do mês para cada associado ativo. Associados que já têm a
+ * parcela daquela referência são ignorados, então rodar duas vezes não duplica
+ * a cobrança.
+ */
+export async function generateMonthlyPayments(
+  reference: string,
+  dueDate: string,
+  amount: number
+): Promise<number> {
+  const prisma = getPrisma();
+  const activeMembers = await prisma.member.findMany({
+    where: { status: "ATIVO" },
+    select: { id: true },
+  });
+
+  if (activeMembers.length === 0) {
+    return 0;
   }
 
-  return list;
+  const result = await prisma.payment.createMany({
+    data: activeMembers.map((member) => ({
+      memberId: member.id,
+      reference,
+      dueDate: parseDateOnly(dueDate),
+      amount,
+      status: "PENDENTE" as PaymentStatus,
+    })),
+    skipDuplicates: true,
+  });
+
+  return result.count;
 }
 
-export function getPaymentsByMemberId(memberId: string) {
-  return db.payments.filter((p: any) => p.memberId === memberId);
+export async function markPaymentAsPaid(paymentId: string, receiptNumber?: string) {
+  await getPrisma().payment.update({
+    where: { id: paymentId },
+    data: {
+      status: "PAGO",
+      paidAt: new Date(),
+      receiptNumber: receiptNumber || `REC-${Date.now()}`,
+    },
+  });
 }
 
-export function generateMonthlyPayments(reference: string, dueDate: string, amount: number) {
-  const now = new Date().toISOString();
-  let count = 0;
-  const activeMembers = db.members.filter((m: any) => m.status === "ATIVO");
+export async function getFinancialSummary() {
+  const prisma = getPrisma();
 
-  for (const m of activeMembers) {
-    const exists = db.payments.some((p: any) => p.memberId === m.id && p.reference === reference);
-    if (!exists) {
-      db.payments.push({
-        id: `pay_${Date.now()}_${count}`,
-        memberId: m.id,
-        memberName: m.fullName,
-        memberRegistration: m.registration,
-        reference,
-        dueDate,
-        amount,
-        status: "PENDENTE",
-        paidAt: null,
-        receiptNumber: null,
-        createdAt: now,
-      });
-      count++;
-    }
-  }
+  const [byStatus, activeMembersCount, docsCount] = await Promise.all([
+    prisma.payment.groupBy({ by: ["status"], _sum: { amount: true } }),
+    prisma.member.count({ where: { status: "ATIVO" } }),
+    prisma.institutionalDocument.count({ where: { published: true } }),
+  ]);
 
-  return count;
-}
+  const sumFor = (status: PaymentStatus) =>
+    Number(byStatus.find((row) => row.status === status)?._sum.amount ?? 0);
 
-export function markPaymentAsPaid(paymentId: string, receiptNumber?: string) {
-  const now = new Date().toISOString();
-  const p = db.payments.find((x: any) => x.id === paymentId);
-  if (p) {
-    p.status = "PAGO";
-    p.paidAt = now;
-    p.receiptNumber = receiptNumber || `REC-${Date.now()}`;
-  }
-}
-
-export function getFinancialSummary() {
-  const pendingAmount = db.payments
-    .filter((p: any) => p.status === "PENDENTE")
-    .reduce((acc: number, p: any) => acc + p.amount, 0);
-
-  const paidAmount = db.payments
-    .filter((p: any) => p.status === "PAGO")
-    .reduce((acc: number, p: any) => acc + p.amount, 0);
-
-  const overdueAmount = db.payments
-    .filter((p: any) => p.status === "ATRASADO")
-    .reduce((acc: number, p: any) => acc + p.amount, 0);
-
-  const activeMembersCount = db.members.filter((m: any) => m.status === "ATIVO").length;
-  const docsCount = db.documents.filter((d: any) => d.published === 1).length;
-
-  return { pendingAmount, paidAmount, overdueAmount, activeMembersCount, docsCount };
+  return {
+    pendingAmount: sumFor("PENDENTE"),
+    paidAmount: sumFor("PAGO"),
+    overdueAmount: sumFor("ATRASADO"),
+    activeMembersCount,
+    docsCount,
+  };
 }
 
 // Documents Queries
-export function listDocuments() {
-  return db.documents.filter((d: any) => d.published === 1);
+export async function listDocuments() {
+  const documents = await getPrisma().institutionalDocument.findMany({
+    where: { published: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return documents.map((doc) => ({
+    id: doc.id,
+    title: doc.title,
+    kind: doc.kind,
+    referenceDate: dateOnly(doc.referenceDate),
+    contentUrl: doc.contentUrl,
+    description: doc.description,
+    published: doc.published,
+    createdAt: doc.createdAt.toISOString(),
+  }));
 }
 
-export function createDocument(data: { title: string; kind: string; contentUrl: string; description?: string }) {
-  const now = new Date().toISOString();
-  const id = `doc_${Date.now()}`;
-  db.documents.push({
-    id,
-    title: data.title,
-    kind: data.kind,
-    referenceDate: now.substring(0, 10),
-    contentUrl: data.contentUrl,
-    description: data.description || null,
-    published: 1,
-    createdAt: now,
+export async function createDocument(data: {
+  title: string;
+  kind: string;
+  contentUrl: string;
+  description?: string;
+}) {
+  const doc = await getPrisma().institutionalDocument.create({
+    data: {
+      title: data.title,
+      kind: data.kind as DocumentKind,
+      referenceDate: new Date(),
+      contentUrl: data.contentUrl,
+      description: data.description || null,
+      published: true,
+    },
   });
-  return id;
+
+  return doc.id;
 }
 
 // Assemblies Queries
-export function listAssemblies() {
-  return db.assemblies;
+export async function listAssemblies() {
+  const assemblies = await getPrisma().assembly.findMany({ orderBy: { scheduledAt: "desc" } });
+
+  return assemblies.map((assembly) => ({
+    id: assembly.id,
+    title: assembly.title,
+    scheduledAt: dateTimeLabel(assembly.scheduledAt),
+    location: assembly.location,
+    agenda: assembly.agenda,
+    status: assembly.status,
+    createdAt: assembly.createdAt.toISOString(),
+  }));
 }
 
-export function createAssembly(data: { title: string; scheduledAt: string; location?: string; agenda?: string }) {
-  const now = new Date().toISOString();
-  const id = `ass_${Date.now()}`;
-  db.assemblies.push({
-    id,
-    title: data.title,
-    scheduledAt: data.scheduledAt,
-    location: data.location || null,
-    agenda: data.agenda || null,
-    status: "AGENDADA",
-    createdAt: now,
+export async function createAssembly(data: {
+  title: string;
+  scheduledAt: string;
+  location?: string;
+  agenda?: string;
+}) {
+  const assembly = await getPrisma().assembly.create({
+    data: {
+      title: data.title,
+      scheduledAt: parseDateTime(data.scheduledAt),
+      location: data.location || null,
+      agenda: data.agenda || null,
+      status: "AGENDADA",
+    },
   });
-  return id;
+
+  return assembly.id;
 }
 
 // Aliases for API route compatibility
 export const getUserByEmail = findUserByEmail;
 export const getUserById = findUserById;
 export const getMemberByUserId = findMemberByUserId;
-
-// Mock Prisma client for compatibility
-export const prisma = {
-  user: {
-    findUnique: async (opts: any) => {
-      if (opts.where?.email) return findUserByEmail(opts.where.email);
-      if (opts.where?.id) return findUserById(opts.where.id);
-      return null;
-    },
-  },
-};

@@ -1,4 +1,11 @@
 node_modules
 .next
 .env*
+!.env.example
 *.db
+
+# Cliente do Prisma — gerado no build (`prisma generate`), nunca versionado.
+app/generated
+
+# Artefato de build do TypeScript.
+tsconfig.tsbuildinfo

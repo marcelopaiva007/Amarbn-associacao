@@ -204,15 +204,17 @@ Push para main/develop
 
 ## 📋 Variáveis de Ambiente
 
-### Desenvolvimento (.env.local)
+### Desenvolvimento (.env)
 ```bash
-DATABASE_URL="file:./prisma/dev.db"
+DATABASE_URL="postgresql://usuario:senha@host/amarbn"
 APP_SESSION_SECRET="sua-chave-secreta-32-chars"
-JWT_SECRET="seu-jwt-secret-32-chars"
-ENCRYPTION_SECRET="sua-encryption-secret-32-chars"
 ADMIN_EMAIL="admin@amarbn.org.br"
-ADMIN_PASSWORD="sua-senha-admin"
+ADMIN_PASSWORD="sua-senha-admin-min-12-chars"
 ```
+
+> O schema é PostgreSQL — não há caminho SQLite. `ADMIN_PASSWORD` é lida apenas
+> pelo `npm run db:seed`; deixando em branco, o seed sorteia uma senha e a
+> exibe uma única vez no terminal. Veja o `README.md` para o passo a passo.
 
 ### Produção (Vercel Settings)
 ```bash
